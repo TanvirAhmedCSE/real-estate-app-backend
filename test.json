@@ -1,0 +1,10 @@
+{
+    "units": [
+        {
+            "odoo_id": 1,
+            "name": "A-101",
+            "project": "Demo",
+            "state": "available"
+        }
+    ]
+}
