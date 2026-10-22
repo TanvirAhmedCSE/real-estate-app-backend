@@ -12,7 +12,7 @@ const pool = new Pool({
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // unit sync batches now carry image lists
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const guard = (header, envName) => (req, res, next) => {
@@ -28,6 +28,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UNIT_STATES = ['available', 'booked', 'sold'];
 const REQUEST_STATUSES = ['pending', 'converted', 'cancelled'];
 
+// Every unit comes with its images (cover first), as [{ url, public_id }].
+const UNIT_SELECT = `
+  SELECT u.*,
+    COALESCE((
+      SELECT json_agg(json_build_object('url', i.url, 'public_id', i.public_id) ORDER BY i.position, i.id)
+      FROM unit_images i WHERE i.unit_odoo_id = u.odoo_id
+    ), '[]'::json) AS images
+  FROM units u`;
+
 app.get('/health', (_req, res) => res.json({ ok: true })); // also wakes Render
 
 // ------------------------------------------------------------------ //
@@ -35,12 +44,12 @@ app.get('/health', (_req, res) => res.json({ ok: true })); // also wakes Render
 // ------------------------------------------------------------------ //
 app.get('/units', appAuth, wrap(async (_req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM units WHERE active ORDER BY project, building, name');
+    `${UNIT_SELECT} WHERE u.active ORDER BY u.project, u.building, u.name`);
   res.json(rows);
 }));
 
 app.get('/units/:id', appAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM units WHERE odoo_id = $1 AND active', [req.params.id]);
+  const { rows } = await pool.query(`${UNIT_SELECT} WHERE u.odoo_id = $1 AND u.active`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'unit not found' });
   res.json(rows[0]);
 }));
@@ -111,6 +120,23 @@ app.post('/sync/units', syncAuth, wrap(async (req, res) => {
         [u.odoo_id, u.name, u.project || null, u.building || null, u.unit_type || null,
          u.floor || null, u.size ?? null, u.size_unit || null, u.price ?? null,
          u.state, u.active !== false]);
+
+      // `images` is the full, ordered list; when Odoo does not send it the stored images stay as they are.
+      if (Array.isArray(u.images)) {
+        const images = u.images;
+        if (!images.every((i) => i && typeof i.public_id === 'string' && i.public_id
+                                 && typeof i.url === 'string' && /^https:\/\//.test(i.url))) {
+          throw Object.assign(new Error('invalid image payload'), { status: 400 });
+        }
+        await client.query('DELETE FROM unit_images WHERE unit_odoo_id = $1', [u.odoo_id]);
+        if (images.length) {
+          await client.query(
+            `INSERT INTO unit_images (unit_odoo_id, public_id, url, position)
+             SELECT $1::int, t.public_id, t.url, t.position
+             FROM unnest($2::text[], $3::text[], $4::int[]) AS t(public_id, url, position)`,
+            [u.odoo_id, images.map((i) => i.public_id), images.map((i) => i.url), images.map((_, idx) => idx)]);
+        }
+      }
     }
     await client.query('COMMIT');
     res.json({ synced: units.length });

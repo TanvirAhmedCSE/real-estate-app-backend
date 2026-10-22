@@ -27,3 +27,14 @@ CREATE TABLE IF NOT EXISTS booking_requests (
 
 CREATE INDEX IF NOT EXISTS idx_requests_unit ON booking_requests (unit_odoo_id);
 CREATE INDEX IF NOT EXISTS idx_requests_updated ON booking_requests (updated_at);
+
+CREATE TABLE IF NOT EXISTS unit_images (
+    id            SERIAL PRIMARY KEY,
+    unit_odoo_id  INTEGER NOT NULL REFERENCES units(odoo_id) ON DELETE CASCADE,
+    public_id     TEXT NOT NULL,
+    url           TEXT NOT NULL,
+    position      INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (unit_odoo_id, public_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_unit_images_unit ON unit_images (unit_odoo_id, position);
