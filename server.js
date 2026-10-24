@@ -23,6 +23,9 @@ const guard = (header, envName) => (req, res, next) => {
 const appAuth = guard('x-app-key', 'APP_KEY');       // Flutter
 const syncAuth = guard('x-sync-secret', 'SYNC_SECRET'); // Odoo
 
+// Customer accounts (register / verify / login) and per-user favourites.
+const { authRouter, favoritesRouter } = require('./user-routes')({ pool, wrap });
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UNIT_STATES = ['available', 'booked', 'sold'];
@@ -42,6 +45,9 @@ app.get('/health', (_req, res) => res.json({ ok: true })); // also wakes Render
 // ------------------------------------------------------------------ //
 // Flutter endpoints (x-app-key)
 // ------------------------------------------------------------------ //
+app.use('/auth', appAuth, authRouter);              // register, verify-email, resend-code, login
+app.use('/favorites', appAuth, favoritesRouter);    // also needs Authorization: Bearer <jwt>
+
 app.get('/units', appAuth, wrap(async (_req, res) => {
   const { rows } = await pool.query(
     `${UNIT_SELECT} WHERE u.active ORDER BY u.project, u.building, u.name`);

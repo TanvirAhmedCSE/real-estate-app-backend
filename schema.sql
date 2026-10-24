@@ -38,3 +38,23 @@ CREATE TABLE IF NOT EXISTS unit_images (
 );
 
 CREATE INDEX IF NOT EXISTS idx_unit_images_unit ON unit_images (unit_odoo_id, position);
+
+-- ---- NEW: customer accounts + per-user favourites ----
+CREATE TABLE IF NOT EXISTS users (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                TEXT NOT NULL,
+    email               TEXT NOT NULL UNIQUE,
+    password_hash       TEXT NOT NULL,
+    is_verified         BOOLEAN NOT NULL DEFAULT FALSE,
+    verify_otp          TEXT,
+    verify_otp_expiry   TIMESTAMPTZ,
+    otp_attempts        INTEGER NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    unit_odoo_id  INTEGER NOT NULL REFERENCES units(odoo_id) ON DELETE CASCADE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, unit_odoo_id)
+);
