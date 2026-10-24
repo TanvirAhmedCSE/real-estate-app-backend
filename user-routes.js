@@ -159,5 +159,5 @@ module.exports = function createUserRoutes({ pool, wrap }) {
     res.json({ ok: true });
   }));
 
-  return { authRouter, favoritesRouter };
+  return { authRouter, favoritesRouter, userAuth };
 };

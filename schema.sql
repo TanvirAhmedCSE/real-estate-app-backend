@@ -58,3 +58,8 @@ CREATE TABLE IF NOT EXISTS favorites (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, unit_odoo_id)
 );
+
+-- ---- NEW: which logged-in account sent each booking request (Neon only, not synced to Odoo) ----
+ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS customer_account_name  TEXT;
+ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS customer_account_email TEXT;
+CREATE INDEX IF NOT EXISTS idx_requests_account ON booking_requests (customer_account_email);
