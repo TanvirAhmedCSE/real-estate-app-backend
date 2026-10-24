@@ -72,3 +72,6 @@ UPDATE favorites f
    SET customer_account_name = u.name, customer_account_email = u.email
   FROM users u
  WHERE u.id = f.user_id AND f.customer_account_email IS NULL;
+
+-- ---- NEW: customer phone on booking requests ----
+ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS customer_phone TEXT;

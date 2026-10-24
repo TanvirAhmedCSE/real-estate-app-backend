@@ -28,12 +28,15 @@ const { authRouter, favoritesRouter, userAuth } = require('./user-routes')({ poo
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Bangladesh-friendly but lenient: optional +, digits/spaces/dashes, 7-15 digits.
+const normPhone = (v) => String(v || '').trim().replace(/[\s-]/g, '');
+const PHONE_RE = /^\+?\d{7,15}$/;
 const UNIT_STATES = ['available', 'booked', 'sold'];
 const REQUEST_STATUSES = ['pending', 'converted', 'cancelled'];
 // Explicit list on purpose: customer_account_name / customer_account_email are for
 // our own records in Neon only and must never be returned by the API or synced to Odoo.
 const REQUEST_COLUMNS =
-  'id, unit_odoo_id, customer_name, customer_email, status, created_at, updated_at';
+  'id, unit_odoo_id, customer_name, customer_email, customer_phone, status, created_at, updated_at';
 
 // Every unit comes with its images (cover first), as [{ url, public_id }].
 const UNIT_SELECT = `
@@ -67,7 +70,9 @@ app.get('/units/:id', appAuth, wrap(async (req, res) => {
 app.post('/units/:id/requests', appAuth, userAuth, wrap(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
+  const phone = normPhone(req.body.phone);
   if (!name || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'valid name and email required' });
+  if (!PHONE_RE.test(phone)) return res.status(400).json({ error: 'valid phone number required' });
 
   // Which account is sending this request: read from the database, never from the request body.
   const acct = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
@@ -87,11 +92,11 @@ app.post('/units/:id/requests', appAuth, userAuth, wrap(async (req, res) => {
     [req.params.id, account.email]);
   if (dup.rows.length) return res.json(dup.rows[0]);
 
-  const { rows } = await pool.query(
+    const { rows } = await pool.query(
     `INSERT INTO booking_requests
-       (unit_odoo_id, customer_name, customer_email, customer_account_name, customer_account_email)
-     VALUES ($1, $2, $3, $4, $5) RETURNING ${REQUEST_COLUMNS}`,
-    [req.params.id, name, email, account.name, account.email]);
+       (unit_odoo_id, customer_name, customer_email, customer_phone, customer_account_name, customer_account_email)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${REQUEST_COLUMNS}`,
+    [req.params.id, name, email, phone, account.name, account.email]);
   res.status(201).json(rows[0]);
 }));
 
