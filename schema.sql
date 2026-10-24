@@ -63,3 +63,12 @@ CREATE TABLE IF NOT EXISTS favorites (
 ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS customer_account_name  TEXT;
 ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS customer_account_email TEXT;
 CREATE INDEX IF NOT EXISTS idx_requests_account ON booking_requests (customer_account_email);
+
+-- ---- NEW: account name/email on each favourite (Neon only, next to user_id) ----
+ALTER TABLE favorites ADD COLUMN IF NOT EXISTS customer_account_name  TEXT;
+ALTER TABLE favorites ADD COLUMN IF NOT EXISTS customer_account_email TEXT;
+-- fill the two columns for favourites saved before this change
+UPDATE favorites f
+   SET customer_account_name = u.name, customer_account_email = u.email
+  FROM users u
+ WHERE u.id = f.user_id AND f.customer_account_email IS NULL;

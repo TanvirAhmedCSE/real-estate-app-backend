@@ -146,9 +146,15 @@ module.exports = function createUserRoutes({ pool, wrap }) {
     if (!Number.isInteger(unitId)) throw httpError(400, 'invalid unit id');
     const unit = await pool.query('SELECT 1 FROM units WHERE odoo_id = $1 AND active', [unitId]);
     if (!unit.rows.length) throw httpError(404, 'unit not found');
+    // Account name/email come from the database (never from the request) and are kept for our own records.
+    const acct = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
+    if (!acct.rows.length) {
+      return res.status(401).json({ error: 'Session expired. Please log in again.', code: 'invalid_token' });
+    }
     await pool.query(
-      `INSERT INTO favorites (user_id, unit_odoo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-      [req.user.id, unitId]);
+      `INSERT INTO favorites (user_id, unit_odoo_id, customer_account_name, customer_account_email)
+       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+      [req.user.id, unitId, acct.rows[0].name, acct.rows[0].email]);
     res.json({ ok: true });
   }));
 
